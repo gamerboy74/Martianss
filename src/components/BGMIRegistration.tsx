@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Trophy, Users, Gamepad2, CheckCircle, ArrowLeft, Upload } from 'lucide-react';
-import { registrationSchema } from '../types/registration';
-import { useRegistration } from '../hooks/useRegistration';
-import type { RegistrationFormData } from '../types/registration';
-import { useApp } from '../context/AppContext';
-import { supabase } from '../lib/supabase';
+import React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { Trophy, Users, Gamepad2, CheckCircle, ArrowLeft } from "lucide-react";
+import { registrationSchema } from "../types/registration";
+import { useRegistration } from "../hooks/useRegistration";
+import type { RegistrationFormData } from "../types/registration";
+import { useApp } from "../context/AppContext";
 
 const BGMIRegistration: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isSubmitting, submitRegistration } = useRegistration();
   const { addNotification } = useApp();
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<RegistrationFormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+  } = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     defaultValues: {
       teamDetails: {
-        teamMembers: Array(3).fill({ name: '', username: '' }),
+        teamMembers: Array(3).fill({ name: "", username: "" }),
       },
       termsAndConditions: {
         agreeToRules: false,
@@ -34,18 +38,62 @@ const BGMIRegistration: React.FC = () => {
     return <Navigate to="/" />;
   }
 
+  const sendConfirmationEmail = async (email: string, fullName: string, teamName: string) => {
+    const payload = { email, fullName, teamName, tournamentId };
+    console.log("Sending email with payload:", payload);
+    try {
+      const response = await fetch(
+        "https://gvmsopxbjhntcublylxu.supabase.co/functions/v1/send-email",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      // Log response details for debugging
+      console.log("Response status:", response.status);
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
+      const responseText = await response.text();
+      console.log("Response body:", responseText);
+
+      if (!response.ok) {
+        throw new Error(`Failed to send confirmation email: ${response.status} - ${responseText}`);
+      }
+
+      console.log("Email sent successfully");
+    } catch (error) {
+      console.error("Email sending failed:", error);
+      addNotification({
+        id: Date.now().toString(),
+        type: "error", // Changed to 'warning' assuming your Notification type supports it
+        message: "Registration successful, but failed to send confirmation email.",
+      });
+    }
+  };
+
   const onSubmit = async (data: RegistrationFormData) => {
     try {
       await submitRegistration(data, tournamentId);
-      navigate('/registration-success');
+      await sendConfirmationEmail(
+        data.personalInfo.email,
+        data.personalInfo.fullName,
+        data.teamDetails.teamName
+      );
+      navigate("/registration-success");
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error("Registration error:", error);
       addNotification({
         id: Date.now().toString(),
-        type: 'error',
-        message: error instanceof Error 
-          ? error.message 
-          : 'An error occurred during registration. Please try again.',
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "An error occurred during registration. Please try again.",
       });
     }
   };
@@ -53,7 +101,7 @@ const BGMIRegistration: React.FC = () => {
   return (
     <section className="min-h-screen py-32 px-4 sm:px-6 lg:px-8 relative">
       <div className="absolute inset-0 bg-gradient-to-b from-purple-900/20 via-black to-black pointer-events-none" />
-      
+
       <div className="max-w-4xl mx-auto relative">
         {/* Back Button */}
         <Link
@@ -65,8 +113,12 @@ const BGMIRegistration: React.FC = () => {
         </Link>
 
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-4">BGMI Tournament Registration</h1>
-          <p className="text-purple-400">Fill out the form below to register for the tournament</p>
+          <h1 className="text-4xl font-bold text-white mb-4">
+            BGMI Tournament Registration
+          </h1>
+          <p className="text-purple-400">
+            Fill out the form below to register for the tournament
+          </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -84,13 +136,14 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('personalInfo.fullName')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("personalInfo.fullName")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="Enter your full name"
                 />
                 {errors.personalInfo?.fullName && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.personalInfo.fullName.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.personalInfo.fullName.message}
+                  </p>
                 )}
               </div>
 
@@ -100,13 +153,14 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('personalInfo.inGameName')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("personalInfo.inGameName")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="Enter your BGMI username"
                 />
                 {errors.personalInfo?.inGameName && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.personalInfo.inGameName.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.personalInfo.inGameName.message}
+                  </p>
                 )}
               </div>
 
@@ -116,12 +170,13 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="date"
-                  {...register('personalInfo.dateOfBirth')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("personalInfo.dateOfBirth")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                 />
                 {errors.personalInfo?.dateOfBirth && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.personalInfo.dateOfBirth.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.personalInfo.dateOfBirth.message}
+                  </p>
                 )}
               </div>
 
@@ -131,13 +186,14 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="tel"
-                  {...register('personalInfo.contactNumber')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("personalInfo.contactNumber")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="+91 1234567890"
                 />
                 {errors.personalInfo?.contactNumber && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.personalInfo.contactNumber.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.personalInfo.contactNumber.message}
+                  </p>
                 )}
               </div>
 
@@ -147,13 +203,14 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="email"
-                  {...register('personalInfo.email')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("personalInfo.email")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="your.email@example.com"
                 />
                 {errors.personalInfo?.email && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.personalInfo.email.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.personalInfo.email.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -173,13 +230,14 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('teamDetails.teamName')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("teamDetails.teamName")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="Enter your team name"
                 />
                 {errors.teamDetails?.teamName && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.teamDetails.teamName.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.teamDetails.teamName.message}
+                  </p>
                 )}
               </div>
 
@@ -189,13 +247,14 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="url"
-                  {...register('teamDetails.teamLogo')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("teamDetails.teamLogo")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="https://example.com/logo.png"
                 />
                 {errors.teamDetails?.teamLogo && (
-                  <p className="mt-1 text-red-400 text-sm">{errors.teamDetails.teamLogo.message}</p>
+                  <p className="mt-1 text-red-400 text-sm">
+                    {errors.teamDetails.teamLogo.message}
+                  </p>
                 )}
                 <p className="mt-1 text-sm text-gray-400">
                   Provide a URL to your team's logo image (PNG, JPG, or JPEG format)
@@ -211,15 +270,13 @@ const BGMIRegistration: React.FC = () => {
                     <input
                       type="text"
                       {...register(`teamDetails.teamMembers.${index}.name`)}
-                      className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                      text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                      className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                       placeholder={`Member ${index + 1} Name`}
                     />
                     <input
                       type="text"
                       {...register(`teamDetails.teamMembers.${index}.username`)}
-                      className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                      text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                      className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                       placeholder={`Member ${index + 1} Username`}
                     />
                   </div>
@@ -229,12 +286,10 @@ const BGMIRegistration: React.FC = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  {...register('teamDetails.isTeamCaptain')}
+                  {...register("teamDetails.isTeamCaptain")}
                   className="w-4 h-4 rounded border-purple-500/30 text-purple-600 focus:ring-purple-500"
                 />
-                <label className="text-sm text-gray-300">
-                  I am the team captain
-                </label>
+                <label className="text-sm text-gray-300">I am the team captain</label>
               </div>
             </div>
           </div>
@@ -252,9 +307,8 @@ const BGMIRegistration: React.FC = () => {
                   Platform
                 </label>
                 <select
-                  {...register('gameDetails.platform')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white focus:outline-none focus:border-purple-500/50"
+                  {...register("gameDetails.platform")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
                 >
                   <option value="Android">Android</option>
                   <option value="iOS">iOS</option>
@@ -268,9 +322,8 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('gameDetails.uid')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("gameDetails.uid")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="Enter your BGMI UID"
                 />
               </div>
@@ -281,9 +334,8 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('gameDetails.deviceModel')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("gameDetails.deviceModel")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="e.g., iPhone 13 Pro, Samsung S21"
                 />
               </div>
@@ -294,9 +346,8 @@ const BGMIRegistration: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('gameDetails.region')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
+                  {...register("gameDetails.region")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50"
                   placeholder="e.g., Asia, Europe"
                 />
               </div>
@@ -316,9 +367,8 @@ const BGMIRegistration: React.FC = () => {
                   Format
                 </label>
                 <select
-                  {...register('tournamentDetails.format')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white focus:outline-none focus:border-purple-500/50"
+                  {...register("tournamentDetails.format")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
                 >
                   <option value="Squad">Squad</option>
                 </select>
@@ -329,9 +379,8 @@ const BGMIRegistration: React.FC = () => {
                   Mode
                 </label>
                 <select
-                  {...register('tournamentDetails.mode')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white focus:outline-none focus:border-purple-500/50"
+                  {...register("tournamentDetails.mode")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
                 >
                   <option value="Battle Royale">Battle Royale</option>
                 </select>
@@ -342,7 +391,7 @@ const BGMIRegistration: React.FC = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  {...register('tournamentDetails.experience')}
+                  {...register("tournamentDetails.experience")}
                   className="w-4 h-4 rounded border-purple-500/30 text-purple-600 focus:ring-purple-500"
                 />
                 <label className="text-sm text-gray-300">
@@ -350,11 +399,10 @@ const BGMIRegistration: React.FC = () => {
                 </label>
               </div>
 
-              {watch('tournamentDetails.experience') && (
+              {watch("tournamentDetails.experience") && (
                 <textarea
-                  {...register('tournamentDetails.previousTournaments')}
-                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg 
-                  text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50 h-24"
+                  {...register("tournamentDetails.previousTournaments")}
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50 h-24"
                   placeholder="Please list your previous tournament experience..."
                 />
               )}
@@ -372,7 +420,7 @@ const BGMIRegistration: React.FC = () => {
               <div className="flex items-start gap-2">
                 <input
                   type="checkbox"
-                  {...register('termsAndConditions.agreeToRules')}
+                  {...register("termsAndConditions.agreeToRules")}
                   className="w-4 h-4 mt-1 rounded border-purple-500/30 text-purple-600 focus:ring-purple-500"
                 />
                 <label className="text-sm text-gray-300">
@@ -383,7 +431,7 @@ const BGMIRegistration: React.FC = () => {
               <div className="flex items-start gap-2">
                 <input
                   type="checkbox"
-                  {...register('termsAndConditions.agreeToFairPlay')}
+                  {...register("termsAndConditions.agreeToFairPlay")}
                   className="w-4 h-4 mt-1 rounded border-purple-500/30 text-purple-600 focus:ring-purple-500"
                 />
                 <label className="text-sm text-gray-300">
@@ -394,7 +442,7 @@ const BGMIRegistration: React.FC = () => {
               <div className="flex items-start gap-2">
                 <input
                   type="checkbox"
-                  {...register('termsAndConditions.agreeToMediaUsage')}
+                  {...register("termsAndConditions.agreeToMediaUsage")}
                   className="w-4 h-4 mt-1 rounded border-purple-500/30 text-purple-600 focus:ring-purple-500"
                 />
                 <label className="text-sm text-gray-300">
@@ -407,11 +455,10 @@ const BGMIRegistration: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium 
-            transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trophy className="w-5 h-5" />
-            <span>{isSubmitting ? 'SUBMITTING...' : 'SUBMIT REGISTRATION'}</span>
+            <span>{isSubmitting ? "SUBMITTING..." : "SUBMIT REGISTRATION"}</span>
           </button>
         </form>
       </div>

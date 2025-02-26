@@ -1,21 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { Users, Check, X, Search, Eye, Calendar, Trophy } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useToast } from '../hooks/useToast';
-import { formatDate } from '../lib/utils';
-import { Button } from '../components/ui/Button';
-import { RegistrationDetailsDialog } from '../components/ui/RegistrationDetailsDialog';
+import React, { useEffect, useState } from "react";
+import { Users, Check, X, Search, Eye, Calendar, Trophy } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { useToast } from "../hooks/useToast";
+import { formatDate } from "../lib/utils";
+import { Button } from "../components/ui/Button";
+import { RegistrationDetailsDialog } from "../components/ui/RegistrationDetailsDialog";
 
 interface Registration {
   id: string;
   tournament_id: string;
   team_name: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: "pending" | "approved" | "rejected";
   created_at: string;
-  team_members: {
-    name: string;
-    username: string;
-  }[];
+  team_members: { name: string; username: string }[];
   contact_info: {
     full_name: string;
     email: string;
@@ -23,21 +20,9 @@ interface Registration {
     in_game_name: string;
     date_of_birth: string;
   };
-  game_details: {
-    platform: string;
-    uid: string;
-    device_model: string;
-    region: string;
-  };
-  tournament_preferences: {
-    format: string;
-    mode: string;
-    experience: boolean;
-    previous_tournaments?: string;
-  };
-  tournaments: {
-    title: string;
-  };
+  game_details: { platform: string; uid: string; device_model: string; region: string };
+  tournament_preferences: { format: string; mode: string; experience: boolean; previous_tournaments?: string };
+  tournaments: { title: string };
   logo_url?: string;
 }
 
@@ -45,7 +30,7 @@ const Registrations: React.FC = () => {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [updateLoading, setUpdateLoading] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const toast = useToast();
@@ -54,21 +39,21 @@ const Registrations: React.FC = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('registrations')
+        .from("registrations")
         .select(`
           *,
           tournaments (
             title
           )
         `)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setRegistrations(data || []);
     } catch (error) {
-      console.error('Error fetching registrations:', error);
-      toast.error('Failed to fetch registrations');
+      console.error("Error fetching registrations:", error);
+      toast.error("Failed to fetch registrations");
     } finally {
       setLoading(false);
     }
@@ -78,24 +63,17 @@ const Registrations: React.FC = () => {
     fetchRegistrations();
 
     const subscription = supabase
-      .channel('registrations_changes')
+      .channel("registrations_changes")
       .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'registrations',
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "registrations" },
         (payload) => {
-          console.log('Received payload:', payload);
-
-          if (payload.eventType === 'UPDATE') {
-            if (payload.new.status !== 'pending') {
-              setRegistrations((prev) =>
-                prev.filter((reg) => reg.id !== payload.new.id)
-              );
+          console.log("Received payload:", payload);
+          if (payload.eventType === "UPDATE") {
+            if (payload.new.status !== "pending") {
+              setRegistrations((prev) => prev.filter((reg) => reg.id !== payload.new.id));
             }
-          } else if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
+          } else if (payload.eventType === "INSERT" && payload.new.status === "pending") {
             setRegistrations((prev) => [payload.new, ...prev]);
           }
         }
@@ -107,45 +85,82 @@ const Registrations: React.FC = () => {
     };
   }, []);
 
-  const updateStatus = async (id: string, status: 'approved' | 'rejected') => {
+  const sendStatusUpdateEmail = async (
+    email: string,
+    fullName: string,
+    teamName: string,
+    tournamentId: string,
+    status: "approved" | "rejected"
+  ) => {
+    try {
+      const response = await fetch(
+        "https://gvmsopxbjhntcublylxu.supabase.co/functions/v1/send-status-update",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ email, fullName, teamName, tournamentId, status }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to send status update email: ${errorText}`);
+      }
+      console.log("Status update email sent successfully");
+    } catch (error) {
+      console.error("Error sending status update email:", error);
+      toast.error("Failed to send status update email");
+    }
+  };
+
+  const updateStatus = async (id: string, status: "approved" | "rejected") => {
     try {
       setUpdateLoading(id);
 
-      if (status === 'rejected') {
-        const { data: registration } = await supabase
-          .from('registrations')
-          .select('logo_url')
-          .eq('id', id)
-          .single();
+      const { data: registration, error: fetchError } = await supabase
+        .from("registrations")
+        .select("team_name, contact_info, tournament_id, logo_url")
+        .eq("id", id)
+        .single();
 
-        if (registration?.logo_url) {
-          const logoPath = new URL(registration.logo_url).pathname.split('/').pop();
-          if (logoPath) {
-            const { error: storageError } = await supabase.storage
-              .from('team-logos')
-              .remove([logoPath]);
+      if (fetchError) throw fetchError;
 
-            if (storageError) {
-              console.error('Error deleting logo:', storageError);
-            }
-          }
+      const { team_name, contact_info, tournament_id, logo_url } = registration;
+
+      if (status === "rejected" && logo_url) {
+        const logoPath = new URL(logo_url).pathname.split("/").pop();
+        if (logoPath) {
+          const { error: storageError } = await supabase.storage
+            .from("team-logos")
+            .remove([logoPath]);
+          if (storageError) console.error("Error deleting logo:", storageError);
         }
       }
 
-      const { error } = await supabase
-        .from('registrations')
-        .update({ 
-          status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
+      const { error: updateError } = await supabase
+        .from("registrations")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
 
-      if (error) throw error;
-      setRegistrations(prev => prev.filter(reg => reg.id !== id));
+      if (updateError) throw updateError;
+
+      setRegistrations((prev) => prev.filter((reg) => reg.id !== id));
+
+      await sendStatusUpdateEmail(
+        contact_info.email,
+        contact_info.full_name,
+        team_name,
+        tournament_id,
+        status
+      );
+
       toast.success(`Registration ${status} successfully`);
     } catch (error) {
-      console.error('Error updating registration:', error);
-      toast.error('Failed to update registration status');
+      console.error("Error updating registration:", error);
+      toast.error("Failed to update registration status");
     } finally {
       setUpdateLoading(null);
     }
@@ -156,10 +171,11 @@ const Registrations: React.FC = () => {
     setIsDetailsOpen(true);
   };
 
-  const filteredRegistrations = registrations.filter(reg => 
-    reg.team_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    reg.contact_info.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    reg.tournaments?.title.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredRegistrations = registrations.filter(
+    (reg) =>
+      reg.team_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reg.contact_info.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reg.tournaments?.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -214,8 +230,8 @@ const Registrations: React.FC = () => {
                       alt={`${registration.team_name} logo`}
                       className="h-12 w-12 rounded-lg object-cover"
                       onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = 'https://via.placeholder.com/48?text=Logo';
+                        console.error(`Failed to load logo: ${registration.logo_url}`);
+                        (e.target as HTMLImageElement).src = "/fallback-logo.png"; // Use a local fallback image
                       }}
                     />
                   ) : (
@@ -252,7 +268,7 @@ const Registrations: React.FC = () => {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => updateStatus(registration.id, 'approved')}
+                    onClick={() => updateStatus(registration.id, "approved")}
                     className="text-green-600 hover:text-green-900 w-full sm:w-auto"
                     leftIcon={<Check className="h-4 w-4" />}
                     isLoading={updateLoading === registration.id}
@@ -262,7 +278,7 @@ const Registrations: React.FC = () => {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => updateStatus(registration.id, 'rejected')}
+                    onClick={() => updateStatus(registration.id, "rejected")}
                     className="text-red-600 hover:text-red-900 w-full sm:w-auto"
                     leftIcon={<X className="h-4 w-4" />}
                     isLoading={updateLoading === registration.id}
